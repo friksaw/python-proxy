@@ -1,13 +1,12 @@
 import http.server
 import socketserver
 import requests
-from urllib.parse import urlparse
 
 PORT = 8080
 
 class Proxy(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
-        url = self.path[1:]
+        url = self.path[1:]  # Убираем символ '/'
         if not url.startswith('http'):
             url = 'http://' + url
         print(f"Proxying GET request to {url}")
@@ -27,14 +26,17 @@ class Proxy(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         url = self.path[1:]  # Убираем символ '/'
         if not url.startswith('http'):
-            url = 'http://' + url  # Добавляем схему если ее нет
+            url = 'http://' + url
         print(f"Proxying POST request to {url}")
 
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length)
 
+        # Обновим заголовки и удалим неявные заголовки
+        headers = {key: self.headers[key] for key in self.headers if key.lower() != 'host'}
+
         try:
-            response = requests.post(url, data=post_data, headers=self.headers)
+            response = requests.post(url, data=post_data, headers=headers, allow_redirects=True)
             self.send_response(response.status_code)
             for header, value in response.headers.items():
                 self.send_header(header, value)
