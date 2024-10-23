@@ -12,12 +12,13 @@ class Proxy(http.server.SimpleHTTPRequestHandler):
         print(f"Proxying GET request to {url}")
 
         try:
-            response = requests.get(url)
+            response = requests.get(url, stream=True)
             self.send_response(response.status_code)
             for header, value in response.headers.items():
                 self.send_header(header, value)
             self.end_headers()
-            self.wfile.write(response.content)
+            for chunk in response.iter_content(chunk_size=1024):
+                self.wfile.write(chunk)
         except Exception as e:
             self.send_response(500)
             self.end_headers()
@@ -36,12 +37,13 @@ class Proxy(http.server.SimpleHTTPRequestHandler):
         headers = {key: self.headers[key] for key in self.headers if key.lower() != 'host'}
 
         try:
-            response = requests.post(url, data=post_data, headers=headers, allow_redirects=True)
+            response = requests.post(url, data=post_data, headers=headers, allow_redirects=True, stream=True)
             self.send_response(response.status_code)
             for header, value in response.headers.items():
                 self.send_header(header, value)
             self.end_headers()
-            self.wfile.write(response.content)
+            for chunk in response.iter_content(chunk_size=1024):
+                self.wfile.write(chunk)
         except Exception as e:
             self.send_response(500)
             self.end_headers()
