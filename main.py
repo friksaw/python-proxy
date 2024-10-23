@@ -2,28 +2,21 @@ import http.server
 import socket
 import socketserver
 import requests
-import select  # Импортируем модуль select для работы с множественными сокетами
+import select
 
 PORT = 8080
 
 class Proxy(http.server.SimpleHTTPRequestHandler):
     def do_CONNECT(self):
-        # Получаем адрес и порт целевого сервера из запроса
         host, port = self.path.split(':', 1)
         port = int(port)
 
-        # Устанавливаем соединение с целевым сервером
         try:
-            # Отправляем ответ о успешном установлении соединения
             self.send_response(200, 'Connection Established')
             self.end_headers()
-
-            # Создаем туннель
             tunnel_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             tunnel_socket.connect((host, port))
-            self.connection.settimeout(5)
 
-            # Передаем данные между клиентом и сервером
             self.proxy_tunnel(tunnel_socket)
 
         except Exception as e:
@@ -32,18 +25,17 @@ class Proxy(http.server.SimpleHTTPRequestHandler):
     def proxy_tunnel(self, tunnel_socket):
         try:
             while True:
-                # Ждем данных от клиента или сервера
                 rlist, _, _ = select.select([self.connection, tunnel_socket], [], [])
                 for r in rlist:
                     if r is self.connection:
                         data = self.connection.recv(4096)
                         if not data:
-                            return  # Закрываем соединение, если данных нет
+                            return
                         tunnel_socket.sendall(data)
                     elif r is tunnel_socket:
                         data = tunnel_socket.recv(4096)
                         if not data:
-                            return  # Закрываем соединение, если данных нет
+                            return
                         self.connection.sendall(data)
 
         except Exception as e:
@@ -88,7 +80,6 @@ class Proxy(http.server.SimpleHTTPRequestHandler):
                 self.send_header(header, value)
             self.end_headers()
             self.wfile.write(response.content)
-
         except requests.RequestException as e:
             self.send_response(500)
             self.end_headers()
