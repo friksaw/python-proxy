@@ -5,6 +5,39 @@ import requests
 PORT = 8080
 
 class Proxy(http.server.SimpleHTTPRequestHandler):
+    def do_CONNECT(self):
+        # Получаем адрес и порт целевого сервера из запроса
+        host, port = self.path.split(':', 1)
+        port = int(port)
+
+        # Устанавливаем соединение с целевым сервером
+        try:
+            self.send_response(200, 'Connection Established')
+            self.end_headers()
+
+            # Создаем туннель
+            self.connection.settimeout(5)
+            # Можем использовать например socket.socket для туннелирования
+            with requests.Session() as session:
+                tunnel_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                tunnel_socket.connect((host, port))
+
+                # Обрабатываем данные, пришедшие с клиента
+                while True:
+                    data = self.connection.recv(4096)
+                    if not data:
+                        break
+                    tunnel_socket.sendall(data)
+
+                    # Ответ от сервера направляем обратно клиенту
+                    response_data = tunnel_socket.recv(4096)
+                    if not response_data:
+                        break
+                    self.connection.sendall(response_data)
+
+        except Exception as e:
+            self.send_error(500, str(e))
+
     def do_GET(self):
         url = self.path[1:]  # Убираем символ '/'
         if not url.startswith('http'):
@@ -18,15 +51,7 @@ class Proxy(http.server.SimpleHTTPRequestHandler):
                 self.send_header(header, value)
             self.end_headers()
 
-            # Handle chunked encoding
-            if 'Transfer-Encoding' in response.headers and response.headers['Transfer-Encoding'] == 'chunked':
-                for chunk in response.iter_content(chunk_size=1024):
-                    if chunk:  # Check if chunk is not empty
-                        chunk_length = int(chunk.splitlines()[0], 16)  # Read chunk length
-                        self.wfile.write(chunk[len(chunk.splitlines()[0]) + 2:]) # Skip length and newline
-            else:
-                # Regular content (not chunked)
-                self.wfile.write(response.content)
+            self.wfile.write(response.content)
 
         except Exception as e:
             self.send_response(500)
@@ -42,7 +67,6 @@ class Proxy(http.server.SimpleHTTPRequestHandler):
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length)
 
-        # Обновим заголовки и удалим неявные заголовки
         headers = {key: self.headers[key] for key in self.headers if key.lower() != 'host'}
 
         try:
@@ -52,15 +76,7 @@ class Proxy(http.server.SimpleHTTPRequestHandler):
                 self.send_header(header, value)
             self.end_headers()
 
-            # Handle chunked encoding
-            if 'Transfer-Encoding' in response.headers and response.headers['Transfer-Encoding'] == 'chunked':
-                for chunk in response.iter_content(chunk_size=1024):
-                    if chunk:
-                        chunk_length = int(chunk.splitlines()[0], 16)
-                        self.wfile.write(chunk[len(chunk.splitlines()[0]) + 2:])
-            else:
-                # Regular content (not chunked)
-                self.wfile.write(response.content)
+            self.wfile.write(response.content)
 
         except Exception as e:
             self.send_response(500)
