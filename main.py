@@ -2,6 +2,7 @@ import http.server
 import socket
 import socketserver
 import requests
+import select  # Импортируем модуль select для работы с множественными сокетами
 
 PORT = 8080
 
@@ -13,31 +14,42 @@ class Proxy(http.server.SimpleHTTPRequestHandler):
 
         # Устанавливаем соединение с целевым сервером
         try:
+            # Отправляем ответ о успешном установлении соединения
             self.send_response(200, 'Connection Established')
             self.end_headers()
 
             # Создаем туннель
+            tunnel_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            tunnel_socket.connect((host, port))
             self.connection.settimeout(5)
-            # Можем использовать например socket.socket для туннелирования
-            with requests.Session() as session:
-                tunnel_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                tunnel_socket.connect((host, port))
 
-                # Обрабатываем данные, пришедшие с клиента
-                while True:
-                    data = self.connection.recv(4096)
-                    if not data:
-                        break
-                    tunnel_socket.sendall(data)
-
-                    # Ответ от сервера направляем обратно клиенту
-                    response_data = tunnel_socket.recv(4096)
-                    if not response_data:
-                        break
-                    self.connection.sendall(response_data)
+            # Передаем данные между клиентом и сервером
+            self.proxy_tunnel(tunnel_socket)
 
         except Exception as e:
             self.send_error(500, str(e))
+
+    def proxy_tunnel(self, tunnel_socket):
+        try:
+            while True:
+                # Ждем данных от клиента или сервера
+                rlist, _, _ = select.select([self.connection, tunnel_socket], [], [])
+                for r in rlist:
+                    if r is self.connection:
+                        data = self.connection.recv(4096)
+                        if not data:
+                            return  # Закрываем соединение, если данных нет
+                        tunnel_socket.sendall(data)
+                    elif r is tunnel_socket:
+                        data = tunnel_socket.recv(4096)
+                        if not data:
+                            return  # Закрываем соединение, если данных нет
+                        self.connection.sendall(data)
+
+        except Exception as e:
+            print("Error in proxy tunnel:", e)
+        finally:
+            tunnel_socket.close()
 
     def do_GET(self):
         url = self.path[1:]  # Убираем символ '/'
@@ -51,10 +63,9 @@ class Proxy(http.server.SimpleHTTPRequestHandler):
             for header, value in response.headers.items():
                 self.send_header(header, value)
             self.end_headers()
-
             self.wfile.write(response.content)
 
-        except Exception as e:
+        except requests.RequestException as e:
             self.send_response(500)
             self.end_headers()
             self.wfile.write(str(e).encode())
@@ -76,14 +87,14 @@ class Proxy(http.server.SimpleHTTPRequestHandler):
             for header, value in response.headers.items():
                 self.send_header(header, value)
             self.end_headers()
-
             self.wfile.write(response.content)
 
-        except Exception as e:
+        except requests.RequestException as e:
             self.send_response(500)
             self.end_headers()
             self.wfile.write(str(e).encode())
 
-with socketserver.TCPServer(("", PORT), Proxy) as httpd:
-    print(f"Serving at port {PORT}")
-    httpd.serve_forever()
+if __name__ == "__main__":
+    with socketserver.TCPServer(("", PORT), Proxy) as httpd:
+        print(f"Serving at port {PORT}")
+        httpd.serve_forever()
