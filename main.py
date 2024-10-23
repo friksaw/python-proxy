@@ -2,15 +2,14 @@ import http.server
 import socketserver
 import requests
 
-PORT = 8080  # Порт, на котором будет работать прокси
+PORT = 8080
 
 class Proxy(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
-        # Получаем полное URL для запроса
-        url = self.path[1:]  # Убираем начальный слэш
+
+        url = self.path[1:]
         print(f" proxying {url}")
 
-        # Выполняем GET-запрос к целевому URL
         try:
             response = requests.get(url)
             self.send_response(response.status_code)
