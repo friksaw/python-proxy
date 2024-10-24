@@ -11,21 +11,16 @@ class Proxy(http.server.SimpleHTTPRequestHandler):
         host, port = self.path.split(':', 1)
         port = int(port)
 
-        if "openai.com" in host:
-            try:
-                self.send_response(200, 'Connection Established')
-                self.end_headers()
-                tunnel_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                tunnel_socket.connect((host, port))
-
-                self.proxy_tunnel(tunnel_socket)
-
-            except Exception as e:
-                self.send_error(500, str(e))
-        else:
-            # If not openai, return 403 Forbidden
-            self.send_response(403, 'Forbidden')
+        try:
+            self.send_response(200, 'Connection Established')
             self.end_headers()
+            tunnel_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            tunnel_socket.connect((host, port))
+
+            self.proxy_tunnel(tunnel_socket)
+
+        except Exception as e:
+            self.send_error(500, str(e))
 
     def proxy_tunnel(self, tunnel_socket):
         try:
