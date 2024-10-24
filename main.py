@@ -4,7 +4,7 @@ import socketserver
 import requests
 import select
 
-PORT = 8080
+PORT = 10080
 
 class Proxy(http.server.SimpleHTTPRequestHandler):
     def do_CONNECT(self):
