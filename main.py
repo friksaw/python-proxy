@@ -44,7 +44,7 @@ class Proxy(http.server.SimpleHTTPRequestHandler):
             tunnel_socket.close()
 
     def do_GET(self):
-        url = self.path[1:]  # Убираем символ '/'
+        url = self.path[1:]  
         if not url.startswith('http'):
             url = 'http://' + url
         print(f"Proxying GET request to {url}")
@@ -63,7 +63,7 @@ class Proxy(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(str(e).encode())
 
     def do_POST(self):
-        url = self.path[1:]  # Убираем символ '/'
+        url = self.path[1:]  
         if not url.startswith('http'):
             url = 'http://' + url
         print(f"Proxying POST request to {url}")
